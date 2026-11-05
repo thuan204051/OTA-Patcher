@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<link rel="manifest" href="ota-patcher.webmanifest">
+<link rel="apple-touch-icon" href="icons/ota-192.png">
+<title>Vá OTA — đổi phiên bản &amp; ký lại gói DFU</title>
+<style>
+  :root{
+    --bg:#0b0f14; --card:#141a22; --card2:#1a222c; --line:#26303c;
+    --fg:#e8eef6; --dim:#8a99ab; --accent:#4ade80; --accent2:#22d3ee;
+    --warn:#fbbf24; --err:#f87171;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(120% 90% at 50% 0%,#101a24 0%,var(--bg) 55%) no-repeat,var(--bg);
+    color:var(--fg);
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    padding:22px 16px calc(28px + env(safe-area-inset-bottom));
+    display:flex;justify-content:center;
+  }
+  .wrap{width:100%;max-width:460px}
+  header{margin:2px 2px 18px}
+  h1{margin:0;font-size:23px;letter-spacing:-.02em;font-weight:800;
+     background:linear-gradient(92deg,var(--accent),var(--accent2));
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{margin:6px 0 0;color:var(--dim);font-size:13.5px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .step{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+  /* file picker */
+  .drop{
+    display:flex;align-items:center;gap:14px;width:100%;padding:16px;
+    background:var(--card2);border:1.5px dashed #33414f;border-radius:14px;color:inherit;
+    font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  .drop:active{background:#1f2937}
+  .drop.has{border-style:solid;border-color:#2f6b4f;background:#13251d}
+  .drop .ic{width:42px;height:42px;flex:0 0 42px;border-radius:12px;display:grid;place-items:center;
+            background:linear-gradient(140deg,#243244,#1b2430);border:1px solid #2b3948}
+  .drop .t{font-weight:650;font-size:14.5px;word-break:break-all}
+  .drop .s{color:var(--dim);font-size:12.5px;margin-top:3px}
+  /* version */
+  .verrow{display:flex;gap:10px;align-items:stretch}
+  .verbox{flex:1;display:flex;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:0 4px}
+  .step-btn{width:48px;height:52px;border:0;background:transparent;color:var(--fg);font-size:22px;font-weight:600;border-radius:12px;cursor:pointer}
+  .step-btn:active{background:#22303e}
+  input[type=number]{
+    flex:1;min-width:0;width:100%;background:transparent;border:0;color:var(--fg);
+    font:700 21px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;padding:14px 0;
+    -moz-appearance:textfield;appearance:textfield;
+  }
+  input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .chips{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:var(--card2);color:var(--dim);border-radius:999px;
+        padding:8px 13px;font:600 12.5px/1 inherit;cursor:pointer}
+  .chip:active{border-color:var(--accent)}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;font-size:13px;border-bottom:1px solid #1e2732}
+  .kv:last-child{border-bottom:0}
+  .kv b{font-weight:650;font-variant-numeric:tabular-nums}
+  .kv span{color:var(--dim)}
+  .btn{
+    width:100%;border:0;border-radius:14px;padding:17px;font:800 16px/1 inherit;color:#04140b;
+    background:linear-gradient(95deg,var(--accent),#34d399);cursor:pointer;margin-top:4px;
+    box-shadow:0 8px 24px -12px rgba(74,222,128,.8);
+  }
+  .btn:disabled{opacity:.42;box-shadow:none;cursor:not-allowed}
+  .btn.secondary{background:transparent;color:var(--fg);border:1px solid var(--line);box-shadow:none;font-weight:650}
+  .note{color:var(--dim);font-size:12.5px;margin:12px 2px 0;display:flex;gap:8px}
+  .note b{color:var(--warn);font-weight:650}
+  .out{display:none}
+  .out.show{display:block}
+  .ok{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--accent);margin-bottom:12px}
+  .ok .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(74,222,128,.16)}
+  .dl{display:block;text-align:center;text-decoration:none;background:linear-gradient(95deg,#22d3ee,#3b82f6);color:#03121a;
+      font-weight:800;padding:15px;border-radius:14px;margin-top:6px}
+  .err{display:none;background:#2a1416;border:1px solid #5b2329;color:#ffc9c9;border-radius:14px;padding:13px;font-size:13.5px}
+  .err.show{display:block}
+  details{margin-top:12px;border-top:1px solid #1e2732;padding-top:12px}
+  summary{cursor:pointer;color:var(--dim);font-size:13px}
+  .filemini{margin-top:10px;font-size:12.5px;color:var(--dim);word-break:break-all}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(0,0,0,.25);border-top-color:#04140b;
+           display:inline-block;vertical-align:-3px;margin-right:8px;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Vá OTA</h1>
+    <p class="sub">Đổi phiên bản và ký lại gói DFU của nhãn — xử lý ngay trên máy, không gửi file đi đâu.</p>
+  </header>
+
+  <section class="card">
+    <div class="step">1 · Chọn gói OTA (.zip)</div>
+    <button class="drop" id="pick" type="button">
+      <span class="ic" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8ab4f8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+        </svg>
+      </span>
+      <span class="grow">
+        <span class="t" id="pickTitle">Chọn file .zip</span>
+        <span class="s" id="pickSub">Gói OTA của nhãn (manifest.json + .dat + .bin)</span>
+      </span>
+    </button>
+    <input type="file" id="file" accept=".zip,application/zip,application/x-zip-compressed" hidden>
+
+    <div class="kv" id="info-current" style="display:none"><span>Phiên bản trong gói</span><b id="curVer">—</b></div>
+    <div class="kv" id="info-app" style="display:none"><span>Ứng dụng</span><b id="appName">—</b></div>
+    <div class="kv" id="info-size" style="display:none"><span>Kích thước</span><b id="appSize">—</b></div>
+  </section>
+
+  <section class="card">
+    <div class="step">2 · Phiên bản muốn nạp</div>
+    <div class="verrow">
+      <div class="verbox">
+        <button class="step-btn" id="minus" type="button" aria-label="Giảm">−</button>
+        <input type="number" id="ver" inputmode="numeric" min="1" step="1" placeholder="1011">
+        <button class="step-btn" id="plus" type="button" aria-label="Tăng">+</button>
+      </div>
+    </div>
+    <div class="chips">
+      <button class="chip" data-add="1" type="button">+1</button>
+      <button class="chip" data-add="10" type="button">+10</button>
+      <button class="chip" data-add="100" type="button">+100</button>
+      <button class="chip" id="chip-next" type="button">Bản đang cài +1</button>
+    </div>
+    <button class="btn" id="go" type="button" disabled>Vá &amp; tải về</button>
+    <p class="note"><b>!</b><span>Nhãn chỉ nhận bản có số phiên bản <b>lớn hơn</b> bản đang chạy. Nạp bản thấp hơn sẽ bị bootloader từ chối (“fw version failed”) và nhãn không đổi gì.</span></p>
+    <div class="err" id="err"></div>
+
+    <details>
+      <summary>Tuỳ chọn nâng cao</summary>
+      <p class="note" style="margin-top:10px"><span>Khoá ký mặc định là khoá của bootloader EPD-nRF5 (đã nhúng sẵn). Nếu nhãn của bạn dùng khoá khác, chọn file <span class="mono">.pem</span> tại đây.</span></p>
+      <button class="btn secondary" id="pickKey" type="button">Chọn khoá .pem khác</button>
+      <input type="file" id="keyfile" accept=".pem,.key,text/plain" hidden>
+      <div class="filemini" id="keyName"></div>
+    </details>
+  </section>
+
+  <section class="card out" id="result">
+    <div class="ok"><span class="dot"></span><span id="okText">Đã vá xong</span></div>
+    <div class="kv"><span>Phiên bản</span><b id="rVer">—</b></div>
+    <div class="kv"><span>File</span><b id="rName" class="mono" style="font-size:12px">—</b></div>
+    <div class="kv" style="border:0"><span>Kích thước gói</span><b id="rSize">—</b></div>
+    <a class="dl" id="download" download>⬇︎ Tải gói đã vá</a>
+    <p class="note"><span>Nạp bằng app <b style="color:var(--fg)">nRF Connect</b> / <b style="color:var(--fg)">nRF Device Firmware Update</b>: chọn đúng nhãn → DFU → chọn file vừa tải → Start.</span></p>
+  </section>
+
+  <p class="note" style="justify-content:center"><span>Chạy offline · không upload · không lưu lịch sử</span></p>
+</div>
+
+<script>
+/*
+ * ota_patch_core.js — re-stamp and re-sign a Nordic Secure DFU package, in pure JS.
+ *
+ * No dependencies: runs in a browser (WebCrypto + DecompressionStream) and in Node 18+.
+ * Used by tools/ota-patcher.html, and by tools/test_ota_patch.js for the host tests.
+ *
+ * What it does, exactly like firmware/tools/patch_ota.py:
+ *   1. read <name>.dat (Nordic init packet, protobuf) and <name>.bin from the zip
+ *   2. replace init.fw_version with the requested version
+ *   3. re-sign SHA-256(init bytes) with the ECDSA P-256 key the bootloader trusts,
+ *      storing the signature as two byte-reversed 32-byte halves (nRF Secure DFU layout)
+ *   4. rebuild the zip with the same file names and the same .bin bytes
+ */
+(function (root) {
+  'use strict';
+
+  /* ------------------------------------------------------------------ bytes */
+
+  function hexToBytes(hex) {
+    const out = new Uint8Array(hex.length >> 1);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+  }
+
+  function bytesToHex(b) {
+    let s = '';
+    for (let i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16);
+    return s;
+  }
+
+  function b64ToBytes(s) {
+    s = s.replace(/-----[^-]+-----/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+    if (typeof atob === 'function') {
+      const bin = atob(s);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    return new Uint8Array(Buffer.from(s, 'base64'));
+  }
+
+  function bytesToB64(b) {
+    if (typeof btoa === 'function') {
+      let s = '';
+      for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+      return btoa(s);
+    }
+    return Buffer.from(b).toString('base64');
+  }
+
+  function concat(list) {
+    let n = 0;
+    for (const a of list) n += a.length;
+    const out = new Uint8Array(n);
+    let o = 0;
+    for (const a of list) {
+      out.set(a, o);
+      o += a.length;
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------- DER / PEM keys */
+
+  function derLen(n) {
+    if (n < 0x80) return new Uint8Array([n]);
+    const bytes = [];
+    while (n > 0) {
+      bytes.unshift(n & 0xff);
+      n >>= 8;
+    }
+    return new Uint8Array([0x80 | bytes.length, ...bytes]);
+  }
+
+  function derWrap(tag, body) {
+    return concat([new Uint8Array([tag]), derLen(body.length), body]);
+  }
+
+  // "EC PRIVATE KEY" (SEC1, what EPD-nRF5 ships) -> PKCS#8, which WebCrypto can import.
+  function sec1ToPkcs8(sec1) {
+    const ecPublicKeyOid = hexToBytes('06072a8648ce3d0201');
+    const prime256v1Oid = hexToBytes('06082a8648ce3d030107');
+    const algId = derWrap(0x30, concat([ecPublicKeyOid, prime256v1Oid]));
+    const version = hexToBytes('020100');
+    return derWrap(0x30, concat([version, algId, derWrap(0x04, sec1)]));
+  }
+
+  function pemToPkcs8(pem) {
+    const der = b64ToBytes(pem);
+    // SEC1 starts with 0x30 and has [0] version + privateKey octet string; PKCS#8 embeds it.
+    if (pem.indexOf('BEGIN EC PRIVATE KEY') >= 0) return sec1ToPkcs8(der);
+    return der;  // already PKCS#8
+  }
+
+  async function importSigningKey(pem) {
+    const subtle = root.crypto && root.crypto.subtle;
+    if (!subtle) throw new Error('Trình duyệt không hỗ trợ WebCrypto. Hãy mở bằng Chrome/Edge/Safari bản mới.');
+    return subtle.importKey('pkcs8', pemToPkcs8(pem), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  }
+
+  // nRF Secure DFU stores the signature as r and s, each one byte-reversed.
+  function toNrfSignature(raw) {
+    if (raw.length !== 64) throw new Error('Chữ ký ECDSA phải là 64 byte (r||s).');
+    const out = new Uint8Array(64);
+    for (let i = 0; i < 32; i++) {
+      out[i] = raw[31 - i];
+      out[32 + i] = raw[63 - i];
+    }
+    return out;
+  }
+
+  /* ----------------------------------------------------- protobuf (subset) */
+
+  // Generic TLV walk: keeps every field, in order, with its raw bytes.
+  function pbParse(buf) {
+    const fields = [];
+    let i = 0;
+    const varint = () => {
+      let value = 0,
+        mul = 1;
+      for (;;) {
+        if (i >= buf.length) throw new Error('init packet bị cắt ngắn');
+        const b = buf[i++];
+        value += (b & 0x7f) * mul;
+        if (!(b & 0x80)) {
+          if (value > Number.MAX_SAFE_INTEGER) throw new Error('varint quá lớn');
+          return value;
+        }
+        mul *= 128;
+      }
+    };
+    while (i < buf.length) {
+      const key = varint();
+      const id = Math.floor(key / 8),
+        wire = key % 8;
+      if (!id) throw new Error('tag không hợp lệ');
+      if (wire === 0) {
+        const v = varint();
+        fields.push({ id, wire, value: v });
+      } else if (wire === 2) {
+        const n = varint();
+        if (i + n > buf.length) throw new Error('trường độ dài bị cắt ngắn');
+        fields.push({ id, wire, bytes: buf.subarray(i, i + n) });
+        i += n;
+      } else if (wire === 5) {
+        fields.push({ id, wire, bytes: buf.subarray(i, i + 4) });
+        i += 4;
+      } else if (wire === 1) {
+        fields.push({ id, wire, bytes: buf.subarray(i, i + 8) });
+        i += 8;
+      } else {
+        throw new Error('wire type không hỗ trợ: ' + wire);
+      }
+    }
+    return fields;
+  }
+
+  function pbVarint(n) {
+    const out = [];
+    for (;;) {
+      let b = n & 0x7f;
+      n = Math.floor(n / 128);
+      if (n) out.push(b | 0x80);
+      else {
+        out.push(b);
+        return new Uint8Array(out);
+      }
+    }
+  }
+
+  function pbSerialize(fields) {
+    const parts = [];
+    for (const f of fields) {
+      parts.push(pbVarint(f.id * 8 + f.wire));
+      if (f.wire === 0) parts.push(pbVarint(f.value));
+      else parts.push(pbVarint(f.bytes.length), f.bytes);
+    }
+    return concat(parts);
+  }
+
+  function pbVarints(bytes) {
+    const out = [];
+    let i = 0;
+    while (i < bytes.length) {
+      let value = 0,
+        mul = 1;
+      for (;;) {
+        const b = bytes[i++];
+        value += (b & 0x7f) * mul;
+        if (!(b & 0x80)) break;
+        mul *= 128;
+      }
+      out.push(value);
+    }
+    return out;
+  }
+
+  const one = (fields, id) => {
+    const hits = fields.filter((f) => f.id === id);
+    if (hits.length !== 1) throw new Error('init packet thiếu/trùng trường ' + id);
+    return hits[0];
+  };
+
+  /* ---------------------------------------------------------------- unzip */
+
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(buf) {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  async function inflateRaw(data) {
+    if (typeof DecompressionStream === 'function') {
+      const ds = new DecompressionStream('deflate-raw');
+      const stream = new Blob([data]).stream().pipeThrough(ds);
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    const zlib = require('zlib');
+    return new Uint8Array(zlib.inflateRawSync(Buffer.from(data)));
+  }
+
+  async function unzip(bytes) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // End of central directory: search the last 64 KiB
+    let eocd = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65558); i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) throw new Error('Không phải file zip hợp lệ.');
+    const count = dv.getUint16(eocd + 10, true);
+    let p = dv.getUint32(eocd + 16, true);
+    const files = [];
+    for (let n = 0; n < count; n++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('central directory hỏng.');
+      const method = dv.getUint16(p + 10, true);
+      const csize = dv.getUint32(p + 20, true);
+      const usize = dv.getUint32(p + 24, true);
+      const nameLen = dv.getUint16(p + 28, true);
+      const extraLen = dv.getUint16(p + 30, true);
+      const commentLen = dv.getUint16(p + 32, true);
+      const localOff = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      p += 46 + nameLen + extraLen + commentLen;
+      if (name.endsWith('/')) continue;
+
+      if (dv.getUint32(localOff, true) !== 0x04034b50) throw new Error('local header hỏng.');
+      const lNameLen = dv.getUint16(localOff + 26, true);
+      const lExtraLen = dv.getUint16(localOff + 28, true);
+      const start = localOff + 30 + lNameLen + lExtraLen;
+      const raw = bytes.subarray(start, start + csize);
+      let data;
+      if (method === 0) data = raw;
+      else if (method === 8) data = await inflateRaw(raw);
+      else throw new Error('Nén kiểu ' + method + ' chưa hỗ trợ.');
+      if (usize && data.length !== usize) throw new Error('Giải nén sai kích thước cho ' + name);
+      files.push({ name, data });
+    }
+    return files;
+  }
+
+  /* ------------------------------------------------------------------ zip */
+
+  function dosDateTime(d) {
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    return { time, date };
+  }
+
+  function zip(files, when) {
+    const { time, date } = dosDateTime(when || new Date());
+    const locals = [];
+    const central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = new TextEncoder().encode(f.name);
+      const crc = crc32(f.data);
+      const local = new Uint8Array(30 + name.length);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 0x04034b50, true);
+      lv.setUint16(4, 20, true); // version needed
+      lv.setUint16(6, 0, true); // flags
+      lv.setUint16(8, 0, true); // stored
+      lv.setUint16(10, time, true);
+      lv.setUint16(12, date, true);
+      lv.setUint32(14, crc, true);
+      lv.setUint32(18, f.data.length, true);
+      lv.setUint32(22, f.data.length, true);
+      lv.setUint16(26, name.length, true);
+      lv.setUint16(28, 0, true);
+      local.set(name, 30);
+      locals.push(local, f.data);
+
+      const cd = new Uint8Array(46 + name.length);
+      const cv = new DataView(cd.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, time, true);
+      cv.setUint16(14, date, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, f.data.length, true);
+      cv.setUint32(24, f.data.length, true);
+      cv.setUint16(28, name.length, true);
+      cv.setUint32(42, offset, true);
+      cd.set(name, 46);
+      central.push(cd);
+      offset += local.length + f.data.length;
+    }
+    const cdStart = offset;
+    let cdSize = 0;
+    for (const c of central) cdSize += c.length;
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, files.length, true);
+    ev.setUint16(10, files.length, true);
+    ev.setUint32(12, cdSize, true);
+    ev.setUint32(16, cdStart, true);
+    return concat([...locals, ...central, eocd]);
+  }
+
+  /* ------------------------------------------------------------ the patch */
+
+  // Returns { zip, version, oldVersion, appSize, hwVersion, sdReq, binName, datName, appName }
+  async function patch(packageBytes, keyPem, opts) {
+    opts = opts || {};
+    const files = await unzip(packageBytes);
+    const byName = new Map(files.map((f) => [f.name, f]));
+
+    const manifestFile = files.find((f) => /(^|\/)manifest\.json$/.test(f.name));
+    if (!manifestFile) throw new Error('Gói này không có manifest.json — không phải gói DFU của Nordic.');
+    let manifest;
+    try {
+      manifest = JSON.parse(new TextDecoder().decode(manifestFile.data));
+    } catch (e) {
+      throw new Error('manifest.json không đọc được.');
+    }
+    const app = manifest && manifest.manifest && manifest.manifest.application;
+    if (!app) throw new Error('manifest.json không có mục "application" (gói này có thể chỉ là SoftDevice/bootloader).');
+
+    const pick = (name) => {
+      const direct = byName.get(name);
+      if (direct) return direct;
+      const base = name.split('/').pop();
+      const hit = files.find((f) => f.name.split('/').pop() === base);
+      if (!hit) throw new Error('Không thấy file "' + name + '" trong gói.');
+      return hit;
+    };
+    const datFile = pick(app.dat_file);
+    const binFile = pick(app.bin_file);
+
+    // ---- parse the init packet
+    const packet = pbParse(datFile.data);
+    const signed = packet.find((f) => f.id === 2);
+    if (!signed || !signed.bytes) throw new Error('Gói không có chữ ký (signed command) — không vá được.');
+    const signedFields = pbParse(signed.bytes);
+    const commandField = one(signedFields, 1);
+    const commandFields = pbParse(commandField.bytes);
+    const initField = one(commandFields, 2);
+    const initFields = pbParse(initField.bytes);
+
+    const versionField = one(initFields, 1);
+    const oldVersion = versionField.value;
+    const appSize = (initFields.find((f) => f.id === 7) || {}).value;
+    const hwVersion = (initFields.find((f) => f.id === 2) || {}).value;
+    // sd_req is a repeated varint: either packed (wire 2) or one field per value (wire 0)
+    const sdReq = [];
+    for (const f of initFields.filter((x) => x.id === 3))
+      if (f.wire === 0) sdReq.push(f.value);
+      else if (f.bytes) sdReq.push(...pbVarints(f.bytes));
+
+    // ---- stamp the new version
+    const version = opts.version;
+    if (!Number.isInteger(version) || version < 1 || version > 0xffffffff) throw new Error('Phiên bản phải là số nguyên dương.');
+    versionField.value = version;
+
+    // ---- rebuild bottom-up: init -> command -> signed command -> packet (lengths recomputed)
+    const initBytes = pbSerialize(initFields);
+    initField.bytes = initBytes;  // command -> init message holds the stamped version
+    const commandBytes = pbSerialize(commandFields);
+    signedFields.find((f) => f.id === 1).bytes = commandBytes;
+
+    const rawSig = new Uint8Array(
+      await root.crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, opts.key, initBytes)
+    );
+    const nrfSig = toNrfSignature(rawSig);
+    const sigField = signedFields.find((f) => f.id === 3);
+    if (sigField && sigField.wire === 2) sigField.bytes = nrfSig;
+    else signedFields.push({ id: 3, wire: 2, bytes: nrfSig });
+
+    const signedBytes = pbSerialize(signedFields);
+    // the bootloader reads the signed command: drop any unsigned command that may sit beside it
+    const packetFields = packet.filter((f) => f.id === 2);
+    packetFields[0].bytes = signedBytes;
+    const newPacket = pbSerialize(packetFields);
+
+    // ---- rebuild the zip, original order, .dat replaced
+    const out = files.map((f) =>
+      f === datFile ? { name: f.name, data: newPacket } : { name: f.name, data: f.data }
+    );
+    return {
+      zip: zip(out),
+      version,
+      oldVersion,
+      appSize,
+      hwVersion,
+      sdReq,
+      appName: datFile.name.split('/').pop().replace(/\.[^.]+$/, ''),
+      binName: binFile.name.split('/').pop(),
+      datName: datFile.name.split('/').pop(),
+    };
+  }
+
+  const api = { patch, importSigningKey, unzip, zip, crc32, hexToBytes, bytesToHex, b64ToBytes, sec1ToPkcs8, pbParse, pbSerialize };
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.OtaPatch = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const KEY_PEM = `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIMZHWw16Q+F1+mV2qg1jKQ4tevgGRDWizqPTnHcFaLvVoAoGCCqGSM49
+AwEHoUQDQgAEGFGuC3G4pI3SfB56dwDmjGVV5aVRe4n+mMrrc46ZP89VXiFslv4G
+8rN7NI34wcD+bxn3tbzj3aBYDgwZx+MiCA==
+-----END EC PRIVATE KEY-----`;
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => n.toLocaleString('vi-VN');
+  const size = (n) => (n > 1024 ? (n / 1024).toFixed(1).replace('.', ',') + ' KB' : n + ' B');
+
+  let pkgBytes = null, pkgName = '', meta = null, keyPem = KEY_PEM, outUrl = null;
+
+  function fail(msg) {
+    const e = $('err');
+    e.textContent = msg;
+    e.classList.add('show');
+  }
+  function clearFail() { $('err').classList.remove('show'); }
+
+  async function loadPackage(file) {
+    clearFail();
+    $('result').classList.remove('show');
+    pkgName = file.name;
+    try {
+      pkgBytes = new Uint8Array(await file.arrayBuffer());
+      // dry-run the parse so the version fields can be shown before patching
+      const files = await OtaPatch.unzip(pkgBytes);
+      const manifestFile = files.find((f) => /(^|\/)manifest\.json$/.test(f.name));
+      if (!manifestFile) throw new Error('Gói này không có manifest.json — không phải gói DFU của Nordic.');
+      const app = JSON.parse(new TextDecoder().decode(manifestFile.data)).manifest?.application;
+      if (!app) throw new Error('manifest.json không có mục "application".');
+      const pick = (n) => files.find((f) => f.name === n) || files.find((f) => f.name.split('/').pop() === n.split('/').pop());
+      const dat = pick(app.dat_file);
+      if (!dat) throw new Error('Không thấy ' + app.dat_file + ' trong gói.');
+
+      const packet = OtaPatch.pbParse(dat.data);
+      const signed = packet.find((f) => f.id === 2);
+      if (!signed) throw new Error('Gói không có chữ ký — không vá được.');
+      const signedFields = OtaPatch.pbParse(signed.bytes);
+      const cmd = OtaPatch.pbParse(signedFields.find((f) => f.id === 1).bytes);
+      const init = OtaPatch.pbParse(cmd.find((f) => f.id === 2).bytes);
+      const cur = init.find((f) => f.id === 1).value;
+      const appSize = (init.find((f) => f.id === 7) || {}).value || 0;
+
+      meta = { cur, appSize, datName: dat.name, binName: app.bin_file };
+      $('curVer').textContent = 'v' + cur;
+      $('appName').textContent = dat.name.split('/').pop().replace(/\.[^.]+$/, '');
+      $('appSize').textContent = size(appSize);
+      ['info-current', 'info-app', 'info-size'].forEach((i) => ($(i).style.display = 'flex'));
+
+      $('pick').classList.add('has');
+      $('pickTitle').textContent = pkgName;
+      $('pickSub').textContent = 'v' + cur + ' · ' + size(appSize) + ' · chạm để chọn file khác';
+      if (!$('ver').value) $('ver').value = cur + 1;
+      $('go').disabled = false;
+    } catch (e) {
+      pkgBytes = null;
+      meta = null;
+      $('go').disabled = true;
+      $('pick').classList.remove('has');
+      $('pickTitle').textContent = 'Chọn file .zip';
+      $('pickSub').textContent = 'Gói OTA của nhãn (manifest.json + .dat + .bin)';
+      ['info-current', 'info-app', 'info-size'].forEach((i) => ($(i).style.display = 'none'));
+      fail(e.message || 'Không đọc được file.');
+    }
+  }
+
+  async function patchNow() {
+    if (!pkgBytes || !meta) return;
+    clearFail();
+    const version = parseInt($('ver').value, 10);
+    if (!Number.isInteger(version) || version < 1) return fail('Nhập số phiên bản hợp lệ (số nguyên dương).');
+    if (version <= meta.cur && !confirm('Phiên bản mới (' + version + ') không lớn hơn bản trong gói (' + meta.cur + ').\nBootloader sẽ từ chối nếu nhãn đang chạy bản ≥ ' + version + '. Vẫn tiếp tục?')) return;
+
+    const btn = $('go');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Đang ký lại gói…';
+    try {
+      const key = await OtaPatch.importSigningKey(keyPem);
+      const res = await OtaPatch.patch(pkgBytes, keyPem, { key, version });
+      if (outUrl) URL.revokeObjectURL(outUrl);
+      const name = pkgName.replace(/\.zip$/i, '') + '-v' + version + '.zip';
+      outUrl = URL.createObjectURL(new Blob([res.zip], { type: 'application/zip' }));
+      const a = $('download');
+      a.href = outUrl;
+      a.download = name;
+      $('okText').textContent = 'Đã vá & ký lại: v' + res.oldVersion + ' → v' + res.version;
+      $('rVer').textContent = 'v' + res.version;
+      $('rName').textContent = name;
+      $('rSize').textContent = size(res.zip.length);
+      $('result').classList.add('show');
+      $('result').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      try { a.click(); } catch (e) { /* sandbox chặn tải tự động: người dùng bấm link */ }
+    } catch (e) {
+      fail(e.message || 'Vá thất bại.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  $('pick').onclick = () => $('file').click();
+  $('file').onchange = (e) => e.target.files[0] && loadPackage(e.target.files[0]);
+  $('go').onclick = patchNow;
+  $('plus').onclick = () => ($('ver').value = (parseInt($('ver').value, 10) || 0) + 1);
+  $('minus').onclick = () => ($('ver').value = Math.max(1, (parseInt($('ver').value, 10) || 2) - 1));
+  $('chip-next').onclick = () => { if (meta) $('ver').value = meta.cur + 1; };
+  document.querySelectorAll('.chip[data-add]').forEach((c) => {
+    c.onclick = () => ($('ver').value = (parseInt($('ver').value, 10) || 0) + Number(c.dataset.add));
+  });
+  $('pickKey').onclick = () => $('keyfile').click();
+  $('keyfile').onchange = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    if (text.indexOf('PRIVATE KEY') < 0) return fail('File khoá không hợp lệ (cần PEM có "PRIVATE KEY").');
+    keyPem = text;
+    $('keyName').textContent = 'Đang dùng: ' + f.name;
+    clearFail();
+  };
+})();
+</script>
+</body>
+</html>
